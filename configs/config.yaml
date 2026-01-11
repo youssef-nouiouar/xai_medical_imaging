@@ -1,0 +1,155 @@
+# Configuration for XAI Medical Imaging Project
+# =============================================
+
+# Dataset Configuration
+dataset:
+  name: "ISIC2019"
+  root_dir: "./data/ISIC2019"
+  image_size: 224
+  num_classes: 9
+  class_names:
+    - "MEL"      # Melanoma
+    - "NV"       # Melanocytic nevus
+    - "BCC"      # Basal cell carcinoma
+    - "AK"       # Actinic keratosis
+    - "BKL"      # Benign keratosis
+    - "DF"       # Dermatofibroma
+    - "VASC"     # Vascular lesion
+    - "SCC"      # Squamous cell carcinoma
+    - "UNK"      # Unknown lesion
+  
+  # Data splits
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  
+  # Data augmentation
+  augmentation:
+    train:
+      horizontal_flip: true
+      vertical_flip: true
+      rotation: 20
+      color_jitter: 0.2
+      random_resized_crop: true
+    val_test:
+      center_crop: true
+
+# Model Configuration
+models:
+  # CNN Baselines
+  resnet50:
+    type: "cnn"
+    name: "resnet50"
+    pretrained: true
+    pretrained_weights: "IMAGENET1K_V2"
+    
+  efficientnet_b4:
+    type: "cnn"
+    name: "efficientnet_b4"
+    pretrained: true
+    pretrained_weights: "IMAGENET1K_V1"
+  
+  # Vision Transformers
+  vit_base:
+    type: "vit"
+    name: "vit_base_patch16_224"
+    pretrained: true
+    pretrained_weights: "imagenet21k"
+    patch_size: 16
+    
+  deit_base:
+    type: "vit"
+    name: "deit_base_patch16_224"
+    pretrained: true
+    
+  swin_base:
+    type: "vit"
+    name: "swin_base_patch4_window7_224"
+    pretrained: true
+    pretrained_weights: "imagenet22k"
+  
+  # Hybrid Models
+  convnext_base:
+    type: "hybrid"
+    name: "convnext_base"
+    pretrained: true
+    pretrained_weights: "imagenet22k"
+
+# Training Configuration
+training:
+  batch_size: 32
+  num_epochs: 50
+  early_stopping_patience: 10
+  
+  # Optimizer
+  optimizer:
+    name: "AdamW"
+    lr: 1e-4
+    weight_decay: 0.01
+    
+  # Learning rate scheduler
+  scheduler:
+    name: "CosineAnnealingLR"
+    T_max: 50
+    eta_min: 1e-6
+    
+  # Loss function
+  loss:
+    name: "CrossEntropyLoss"
+    label_smoothing: 0.1
+    class_weights: true  # Handle imbalanced classes
+
+# XAI Configuration
+xai:
+  methods:
+    # Gradient-based
+    gradcam:
+      enabled: true
+      target_layers: "auto"  # Automatically detect last conv layer
+      
+    gradcam_pp:
+      enabled: true
+      
+    # Attention-based (ViT only)
+    attention_rollout:
+      enabled: true
+      head_fusion: "mean"  # mean, max, min
+      discard_ratio: 0.9
+      
+    generic_attention:  # Chefer et al.
+      enabled: true
+      
+    # Model-agnostic
+    lime:
+      enabled: true
+      num_samples: 1000
+      num_features: 10
+      
+    shap:
+      enabled: true
+      n_samples: 100
+      
+    integrated_gradients:
+      enabled: true
+      n_steps: 50
+      
+  # Evaluation metrics
+  evaluation:
+    insertion_deletion: true
+    pointing_game: true
+    sanity_checks: true
+
+# Hardware Configuration
+hardware:
+  device: "cuda"  # cuda, cpu, mps
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: true
+
+# Logging Configuration
+logging:
+  use_wandb: false
+  project_name: "XAI-Medical-Imaging"
+  save_dir: "./results"
+  log_interval: 10
+  save_best_model: true
