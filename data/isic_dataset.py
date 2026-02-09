@@ -131,7 +131,7 @@ class ISICDataset(Dataset):
                     hue=0.1,
                     p=0.5
                 ),
-                A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+                A.GaussNoise(std_range=(0.02, 0.1), p=0.2),
                 A.GaussianBlur(blur_limit=(3, 7), p=0.2),
                 A.Normalize(
                     mean=[0.485, 0.456, 0.406],
@@ -239,14 +239,15 @@ def get_data_loaders(
         Dict avec les DataLoaders 'train', 'val', 'test'
     """
     loaders = {}
-    
+    pin = torch.cuda.is_available()
+
     for split in ['train', 'val', 'test']:
         dataset = ISICDataset(
             root_dir=root_dir,
             split=split,
             image_size=image_size
         )
-        
+
         if split == 'train' and use_weighted_sampling:
             # Weighted sampling pour gérer le déséquilibre des classes
             sample_weights = dataset.get_sample_weights()
@@ -260,7 +261,7 @@ def get_data_loaders(
                 batch_size=batch_size,
                 sampler=sampler,
                 num_workers=num_workers,
-                pin_memory=True
+                pin_memory=pin
             )
         else:
             loaders[split] = DataLoader(
@@ -268,7 +269,7 @@ def get_data_loaders(
                 batch_size=batch_size,
                 shuffle=(split == 'train'),
                 num_workers=num_workers,
-                pin_memory=True
+                pin_memory=pin
             )
     
     return loaders

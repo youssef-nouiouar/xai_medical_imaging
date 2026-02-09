@@ -26,13 +26,26 @@ from PIL import Image
 
 # Imports conditionnels pour les librairies XAI
 try:
-    from pytorch_grad_cam import GradCAM, GradCAMPlusPlus, ScoreCAM
+    from pytorch_grad_cam import GradCAM, GradCAMPlusPlus, ScoreCAM, EigenCAM
     from pytorch_grad_cam.utils.image import show_cam_on_image
     from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
     GRADCAM_AVAILABLE = True
 except ImportError:
     GRADCAM_AVAILABLE = False
     print("Warning: pytorch-grad-cam non installé. Installez avec: pip install pytorch-grad-cam")
+
+
+def reshape_transform(tensor, height=14, width=14):
+    """
+    Reshape ViT token output to spatial 2D format for CAM compatibility.
+
+    ViT outputs (batch, num_tokens, embed_dim) where num_tokens = 1 (CLS) + H*W patches.
+    This removes the CLS token and reshapes to (batch, height, width, embed_dim).
+    """
+    result = tensor[:, 1:, :]  # Remove CLS token
+    result = result.reshape(result.size(0), height, width, result.size(2))
+    result = result.permute(0, 3, 1, 2)  # (B, C, H, W)
+    return result
 
 try:
     from captum.attr import IntegratedGradients, LayerGradCam, Saliency
@@ -142,44 +155,55 @@ class BaseXAI(ABC):
 class GradCAMExplainer(BaseXAI):
     """
     Grad-CAM: Gradient-weighted Class Activation Mapping.
-    
+
     Compatible avec les CNN et les ViT (avec adaptation).
+    Pour les ViT, utilise EigenCAM avec reshape_transform pour convertir
+    les tokens en cartes spatiales 2D.
     """
-    
+
     def __init__(
         self,
         model: nn.Module,
         target_layer: nn.Module,
         device: str = 'cuda',
-        use_cuda: bool = True
+        is_vit: bool = False
     ):
         super().__init__(model, device)
         self.target_layer = target_layer
-        
+        self.is_vit = is_vit
+
         if GRADCAM_AVAILABLE:
-            self.cam = GradCAM(
-                model=model,
-                target_layers=[target_layer],
-                # use_cuda=use_cuda and torch.cuda.is_available()
-            )
+            if self.is_vit:
+                # ViT: use EigenCAM with reshape_transform
+                self.cam = EigenCAM(
+                    model=model,
+                    target_layers=[target_layer],
+                    reshape_transform=reshape_transform
+                )
+            else:
+                # CNN: use standard GradCAM
+                self.cam = GradCAM(
+                    model=model,
+                    target_layers=[target_layer],
+                )
         else:
             self.cam = None
             self._setup_manual_gradcam()
-    
+
     def _setup_manual_gradcam(self):
         """Configuration manuelle de Grad-CAM si la librairie n'est pas disponible."""
         self.gradients = None
         self.activations = None
-        
+
         def forward_hook(module, input, output):
             self.activations = output.detach()
-            
+
         def backward_hook(module, grad_input, grad_output):
             self.gradients = grad_output[0].detach()
-        
+
         self.target_layer.register_forward_hook(forward_hook)
         self.target_layer.register_full_backward_hook(backward_hook)
-    
+
     def explain(
         self,
         input_tensor: torch.Tensor,
@@ -187,16 +211,16 @@ class GradCAMExplainer(BaseXAI):
     ) -> np.ndarray:
         """Générer la carte Grad-CAM."""
         input_tensor = input_tensor.to(self.device)
-        
+
         if self.cam is not None:
-            # Utiliser pytorch-grad-cam
+            # Utiliser pytorch-grad-cam (GradCAM or EigenCAM)
             targets = [ClassifierOutputTarget(target_class)] if target_class is not None else None
             grayscale_cam = self.cam(input_tensor=input_tensor, targets=targets)
             return grayscale_cam[0]
         else:
-            # Implémentation manuelle
+            # Implémentation manuelle (CNN uniquement)
             return self._manual_gradcam(input_tensor, target_class)
-    
+
     def _manual_gradcam(
         self,
         input_tensor: torch.Tensor,
@@ -204,30 +228,30 @@ class GradCAMExplainer(BaseXAI):
     ) -> np.ndarray:
         """Implémentation manuelle de Grad-CAM."""
         self.model.zero_grad()
-        
+
         # Forward pass
         output = self.model(input_tensor)
-        
+
         if target_class is None:
             target_class = output.argmax(dim=1).item()
-        
+
         # Backward pass
         one_hot = torch.zeros_like(output)
         one_hot[0, target_class] = 1
         output.backward(gradient=one_hot, retain_graph=True)
-        
+
         # Calculer Grad-CAM
         weights = self.gradients.mean(dim=(2, 3), keepdim=True)
         cam = (weights * self.activations).sum(dim=1, keepdim=True)
         cam = F.relu(cam)
-        
+
         # Normaliser
         cam = cam.squeeze().cpu().numpy()
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
-        
+
         # Redimensionner à la taille de l'image
         cam = cv2.resize(cam, (224, 224))
-        
+
         return cam
 
 
@@ -687,7 +711,8 @@ class XAIFactory:
         # Configuration spécifique
         if method_name == 'gradcam':
             target_layer = model.get_target_layer()
-            return GradCAMExplainer(model, target_layer, device, **kwargs)
+            is_vit = getattr(model, 'model_type', '') == 'vit'
+            return GradCAMExplainer(model, target_layer, device, is_vit=is_vit, **kwargs)
         else:
             return methods[method_name](model, device, **kwargs)
     

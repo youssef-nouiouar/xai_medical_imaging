@@ -382,7 +382,7 @@ def main():
                        choices=['resnet50', 'efficientnet_b4', 'vit_base', 
                                'deit_base', 'swin_base', 'convnext_base'],
                        help='Modèle à entraîner')
-    parser.add_argument('--data_dir', type=str, default='./data/ISIC2019',
+    parser.add_argument('--data_dir', type=str, default='../data/ISIC2019',
                        help='Chemin vers le dataset')
     parser.add_argument('--epochs', type=int, default=50,
                        help='Nombre d\'epochs')
@@ -400,10 +400,11 @@ def main():
     # Charger la configuration
     if os.path.exists(args.config):
         with open(args.config, 'r') as f:
-            config = yaml.safe_load(f)
+            full_config = yaml.safe_load(f)
+        config = full_config.get('training', {})
     else:
         config = {}
-    
+
     # Override avec les arguments CLI
     config['optimizer'] = config.get('optimizer', {})
     config['optimizer']['lr'] = args.lr
@@ -436,7 +437,7 @@ def main():
     print(f"\n[2/4] Création du modèle: {args.model}")
     model = ModelFactory.create(
         model_name=args.model,
-        num_classes=8,  # ISIC 2019 a 8 classes
+        num_classes=9,  # ISIC 2019 a 9 classes
         pretrained=True
     )
     print(f"  • Type: {model.model_type}")
