@@ -437,7 +437,7 @@ def main():
     print(f"\n[2/4] Création du modèle: {args.model}")
     model = ModelFactory.create(
         model_name=args.model,
-        num_classes=9,  # ISIC 2019 a 9 classes
+        num_classes=8,  # ISIC 2019 (UNK excluded — 0 samples)
         pretrained=True
     )
     print(f"  • Type: {model.model_type}")

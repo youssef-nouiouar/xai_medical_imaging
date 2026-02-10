@@ -35,8 +35,8 @@ class ISICDataset(Dataset):
     └── ISIC_2019_Training_Metadata.csv (optionnel)
     """
     
-    # Mapping des classes ISIC 2019
-    CLASS_NAMES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC','UNK']
+    # Mapping des classes ISIC 2019 (UNK excluded — 0 samples in dataset)
+    CLASS_NAMES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC']
     CLASS_FULL_NAMES = {
         'MEL': 'Melanoma',
         'NV': 'Melanocytic nevus',
@@ -46,7 +46,6 @@ class ISICDataset(Dataset):
         'DF': 'Dermatofibroma',
         'VASC': 'Vascular lesion',
         'SCC': 'Squamous cell carcinoma',
-        'UNK': 'Unknown lesion'
     }
     
     def __init__(
@@ -91,7 +90,11 @@ class ISICDataset(Dataset):
             )
         
         df = pd.read_csv(csv_path)
-        
+
+        # Drop UNK column if present (0 samples in ISIC 2019)
+        if 'UNK' in df.columns:
+            df = df.drop(columns=['UNK'])
+
         # Convertir one-hot encoding en labels
         label_columns = [col for col in df.columns if col != 'image']
         df['label'] = df[label_columns].values.argmax(axis=1)
@@ -205,9 +208,13 @@ class ISICDataset(Dataset):
     
     def get_class_weights(self) -> torch.Tensor:
         """Calculer les poids des classes pour gérer le déséquilibre."""
-        class_counts = self.df['label'].value_counts().sort_index().values
+        num_classes = len(self.CLASS_NAMES)
+        class_counts = np.zeros(num_classes)
+        for label, count in self.df['label'].value_counts().items():
+            class_counts[label] = count
+        class_counts = np.maximum(class_counts, 1)  # avoid division by zero
         total = len(self.df)
-        weights = total / (len(class_counts) * class_counts)
+        weights = total / (num_classes * class_counts)
         return torch.FloatTensor(weights)
     
     def get_sample_weights(self) -> np.ndarray:
