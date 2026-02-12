@@ -61,9 +61,8 @@ class XAIEvaluator:
         # Grad-CAM (compatible avec tous)
         try:
             target_layer = self.model.get_target_layer()
-            is_vit = getattr(self.model, 'model_type', '') == 'vit'
             methods['gradcam'] = GradCAMExplainer(
-                self.model, target_layer, self.device, is_vit=is_vit
+                self.model, target_layer, self.device
             )
             print("  ✓ Grad-CAM initialisé")
         except Exception as e:
@@ -505,7 +504,7 @@ def main():
     
     # Charger le modèle
     print(f"\n[1/3] Chargement du modèle {args.model}...")
-    model = ModelFactory.create(args.model, num_classes=9, pretrained=False)
+    model = ModelFactory.create(args.model, num_classes=8, pretrained=False)
     
     checkpoint = torch.load(args.checkpoint, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])

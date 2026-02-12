@@ -4,7 +4,7 @@ Model Architectures Module
 Ce module contient les architectures CNN, Vision Transformer et Hybrides
 pour la classification d'images médicales.
 
-Auteur: [youssef Nouioaur]
+Auteur: [Votre Nom]
 Date: 2025
 """
 
