@@ -4,6 +4,8 @@ __pycache_
 
 notebooks/desktop.ini
 notebooks/.ipynb_checkpoints
+# Ignore demo notebooks
+notebooks/Copy_of_demo_xai_medical.ipynb
 
 nul
 results/
