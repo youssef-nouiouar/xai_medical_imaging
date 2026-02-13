@@ -1,0 +1,9 @@
+data/ISIC2019
+
+__pycache_
+
+notebooks/desktop.ini
+notebooks/.ipynb_checkpoints
+
+nul
+results/
