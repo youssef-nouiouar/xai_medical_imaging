@@ -1,3 +1,10 @@
+"""
+ISIC 2019 Dataset with Anti-Overfitting Augmentation Support
+=============================================================
+Supports multiple augmentation strengths based on Gayatri & Aarthy (2023):
+"Reduction of overfitting on the highly imbalanced ISIC-2019 skin dataset"
+"""
+
 import os
 import pandas as pd
 from PIL import Image
@@ -14,10 +21,32 @@ from albumentations.pytorch import ToTensorV2
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+# Class names for ISIC 2019
+CLASS_NAMES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC']
+
+
 class ISICDataset(Dataset):
+    """
+    ISIC 2019 Dataset with configurable augmentation strength.
+    
+    Args:
+        root_dir: Path to ISIC2019 data directory
+        split: 'train', 'val', or 'test'
+        transform: Custom transform (overrides augmentation_strength)
+        image_size: Target image size (default: 224)
+        use_albumentations: Use albumentations library (default: True)
+        use_official_test: Use official test set (default: False)
+        val_ratio: Validation split ratio (default: 0.1)
+        random_state: Random seed (default: 42)
+        augmentation_strength: 'light', 'medium', or 'strong' (default: 'medium')
+                              'strong' is recommended for anti-overfitting
+    """
+    
+    CLASS_NAMES = CLASS_NAMES
+    
     def __init__(self, root_dir, split='train', transform=None, image_size=224,
                  use_albumentations=True, use_official_test=False, val_ratio=0.1,
-                 random_state=42):
+                 random_state=42, augmentation_strength='medium'):
         self.root_dir = root_dir
         self.split = split
         self.transform = transform
@@ -26,6 +55,7 @@ class ISICDataset(Dataset):
         self.use_official_test = use_official_test
         self.val_ratio = val_ratio
         self.random_state = random_state
+        self.augmentation_strength = augmentation_strength
 
         if self.use_official_test:
             self.image_dir_train = os.path.join(root_dir, 'ISIC_2019_Training_Input')
@@ -116,16 +146,41 @@ class ISICDataset(Dataset):
         ])
 
     def _get_albumentations_transform(self):
-        # Define Albumentations transforms for train, val, test splits
-        # Using A.HorizontalFlip, A.VerticalFlip, A.RandomBrightnessContrast, A.ShiftScaleRotate
-
-        if self.split == 'train':
+        """
+        Get Albumentations transforms based on split and augmentation_strength.
+        
+        Augmentation strengths (for training):
+        - 'light': Basic augmentations (flips, small rotation)
+        - 'medium': Moderate augmentations (default)
+        - 'strong': Aggressive augmentations for anti-overfitting (Gayatri & Aarthy 2023)
+        """
+        if self.split != 'train':
+            # Validation and Test: no augmentation, just resize and normalize
+            return A.Compose([
+                A.Resize(self.image_size, self.image_size),
+                A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+                ToTensorV2()
+            ])
+        
+        # Training transforms based on strength
+        if self.augmentation_strength == 'light':
             return A.Compose([
                 A.RandomResizedCrop(
-                    height=self.image_size, width=self.image_size, # Corrected: use height and width
-                    scale=(0.8, 1.0),
-                    ratio=(0.75, 1.333),
-                    p=0.5
+                    height=self.image_size, width=self.image_size,
+                    scale=(0.85, 1.0), ratio=(0.9, 1.1), p=0.5
+                ),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.5),
+                A.Rotate(limit=15, p=0.5),
+                A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+                ToTensorV2()
+            ])
+        
+        elif self.augmentation_strength == 'medium':
+            return A.Compose([
+                A.RandomResizedCrop(
+                    height=self.image_size, width=self.image_size,
+                    scale=(0.8, 1.0), ratio=(0.75, 1.333), p=0.5
                 ),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
@@ -134,9 +189,53 @@ class ISICDataset(Dataset):
                 A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
                 ToTensorV2()
             ])
-        else: # Validation and Test transforms
+        
+        else:  # 'strong' - recommended for anti-overfitting (Gayatri & Aarthy 2023)
             return A.Compose([
-                A.Resize(self.image_size, self.image_size),
+                # Geometric transforms (crucial for dermoscopy)
+                A.RandomResizedCrop(
+                    height=self.image_size, width=self.image_size,
+                    scale=(0.6, 1.0), ratio=(0.75, 1.33), p=1.0
+                ),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.5),
+                A.RandomRotate90(p=0.5),
+                A.ShiftScaleRotate(
+                    shift_limit=0.15, scale_limit=0.2, rotate_limit=45,
+                    border_mode=0, p=0.7
+                ),
+                
+                # Color augmentations (skin lesion variability)
+                A.OneOf([
+                    A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3),
+                    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20),
+                    A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+                ], p=0.7),
+                
+                # Dermoscopy-specific: simulate occlusions (hair, artifacts)
+                A.OneOf([
+                    A.CoarseDropout(
+                        max_holes=12, max_height=16, max_width=16,
+                        min_holes=4, fill_value=0, p=1.0
+                    ),
+                    A.GridDropout(ratio=0.2, p=1.0),
+                ], p=0.3),
+                
+                # Noise and blur (camera variability)
+                A.OneOf([
+                    A.GaussianBlur(blur_limit=(3, 7)),
+                    A.MotionBlur(blur_limit=5),
+                    A.MedianBlur(blur_limit=5),
+                ], p=0.2),
+                A.GaussNoise(var_limit=(10, 50), p=0.3),
+                
+                # Elastic transforms
+                A.OneOf([
+                    A.ElasticTransform(alpha=120, sigma=120 * 0.05, p=1.0),
+                    A.GridDistortion(p=1.0),
+                    A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
+                ], p=0.2),
+                
                 A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
                 ToTensorV2()
             ])
