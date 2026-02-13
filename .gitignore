@@ -7,3 +7,22 @@ notebooks/.ipynb_checkpoints
 
 nul
 results/
+.claude
+AGENT_CONFIGURATION_GUIDE.md
+
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore Claude settings
+.claude/
+
+# Ignore local configs
+settings.local.json
+
+# Ignore PDFs if not needed
+*.pdf
