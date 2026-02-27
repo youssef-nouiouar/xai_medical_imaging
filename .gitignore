@@ -28,6 +28,7 @@ settings.local.json
 
 # Ignore PDFs if not needed
 *.pdf
-
+*.docx
+*.xlsx
 results/
 results_old/

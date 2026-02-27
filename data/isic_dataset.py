@@ -168,7 +168,7 @@ class ISICDataset(Dataset):
         if self.augmentation_strength == 'light':
             return A.Compose([
                 A.RandomResizedCrop(
-                    height=self.image_size, width=self.image_size,
+                    size=(self.image_size, self.image_size),
                     scale=(0.85, 1.0), ratio=(0.9, 1.1), p=0.5
                 ),
                 A.HorizontalFlip(p=0.5),
@@ -181,7 +181,7 @@ class ISICDataset(Dataset):
         elif self.augmentation_strength == 'medium':
             return A.Compose([
                 A.RandomResizedCrop(
-                    height=self.image_size, width=self.image_size,
+                    size=(self.image_size, self.image_size),
                     scale=(0.8, 1.0), ratio=(0.75, 1.333), p=0.5
                 ),
                 A.HorizontalFlip(p=0.5),
@@ -196,7 +196,7 @@ class ISICDataset(Dataset):
             return A.Compose([
                 # Geometric transforms (crucial for dermoscopy)
                 A.RandomResizedCrop(
-                    height=self.image_size, width=self.image_size,
+                    size=(self.image_size, self.image_size),
                     scale=(0.6, 1.0), ratio=(0.75, 1.33), p=1.0
                 ),
                 A.HorizontalFlip(p=0.5),
@@ -217,8 +217,9 @@ class ISICDataset(Dataset):
                 # Dermoscopy-specific: simulate occlusions (hair, artifacts)
                 A.OneOf([
                     A.CoarseDropout(
-                        max_holes=12, max_height=16, max_width=16,
-                        min_holes=4, fill_value=0, p=1.0
+                        num_holes_range=(4, 12),
+                        hole_height_range=(8, 16), hole_width_range=(8, 16),
+                        fill=0, p=1.0
                     ),
                     A.GridDropout(ratio=0.2, p=1.0),
                 ], p=0.3),
@@ -233,7 +234,7 @@ class ISICDataset(Dataset):
                 
                 # Elastic transforms
                 A.OneOf([
-                    A.ElasticTransform(alpha=120, sigma=120 * 0.05, p=1.0),
+                    A.ElasticTransform(alpha=120, sigma=6.0, p=1.0),
                     A.GridDistortion(p=1.0),
                     A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
                 ], p=0.2),
