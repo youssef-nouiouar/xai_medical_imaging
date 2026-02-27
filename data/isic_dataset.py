@@ -46,7 +46,7 @@ class ISICDataset(Dataset):
     
     def __init__(self, root_dir, split='train', transform=None, image_size=224,
                  use_albumentations=True, use_official_test=False, val_ratio=0.1,
-                 random_state=42, augmentation_strength='medium'):
+                 test_ratio=0.1, random_state=42, augmentation_strength='medium'):
         self.root_dir = root_dir
         self.split = split
         self.transform = transform
@@ -54,6 +54,7 @@ class ISICDataset(Dataset):
         self.use_albumentations = use_albumentations
         self.use_official_test = use_official_test
         self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
         self.random_state = random_state
         self.augmentation_strength = augmentation_strength
 
@@ -111,11 +112,12 @@ class ISICDataset(Dataset):
                 df_full = df_full.drop(columns=['UNK'])
 
             train_val_df, test_df = train_test_split(
-                df_full, test_size=0.2, random_state=self.random_state,
+                df_full, test_size=self.test_ratio, random_state=self.random_state,
                 stratify=df_full[self.class_names].values.argmax(axis=1)
             )
+            val_size = self.val_ratio / (1 - self.test_ratio)
             train_df, val_df = train_test_split(
-                train_val_df, test_size=self.val_ratio / (1 - 0.2), random_state=self.random_state,
+                train_val_df, test_size=val_size, random_state=self.random_state,
                 stratify=train_val_df[self.class_names].values.argmax(axis=1)
             )
 
