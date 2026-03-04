@@ -12,7 +12,7 @@ results/
 .claude
 AGENT_CONFIGURATION_GUIDE.md
 
-
+_lxt_temp/
 # Ignore Python cache
 __pycache__/
 *.pyc
@@ -34,3 +34,4 @@ results/
 results_old/
 *.csv
 *.md
+*.conf
